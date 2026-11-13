@@ -1,0 +1,135 @@
+# Supply chain security: AST detection <-> AI engine <-> live admin dashboard.
+#
+#   docker compose up --build
+#
+# builds all images, starts the AST service and the dashboard, trains the models through the
+# AST service (trainer), serves them (ai_engine), runs the verification suite (tests), and keeps
+# the dashboard running at http://127.0.0.1:8501. `./run_pipeline.sh` does the same detached and
+# returns the test suite's exit code.
+name: supply-chain-security
+
+x-env: &event_env
+  EVENT_SINK_URL: http://dashboard:8501/api/events
+  SCS_EVENT_TOKEN: ${SCS_EVENT_TOKEN:-scs-local-dev-token}
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp"]
+
+x-ai-build: &ai_build
+  context: .
+  dockerfile: ai_engine/Dockerfile
+
+services:
+  dashboard:
+    build: {context: ., dockerfile: dashboard/Dockerfile}
+    image: scs-dashboard:latest
+    environment:
+      AI_ENGINE_URL: http://ai_engine:8100
+      AST_SERVICE_URL: http://ast_detection:8000
+      SCS_EVENT_TOKEN: ${SCS_EVENT_TOKEN:-scs-local-dev-token}
+      ARTIFACT_DIR: /artifacts
+      TEST_RESULTS_DIR: /results
+      REPORTS_DIR: /reports
+    volumes:
+      - model_artifacts:/artifacts:ro
+      - test_results:/results:ro
+      - ./reports:/reports:ro
+      - dashboard_data:/data
+    ports: ["127.0.0.1:${DASHBOARD_PORT:-8501}:8501"]   # localhost only
+    networks: [backend, frontend]
+    <<: *hardening
+
+  ast_detection:
+    build: {context: ., dockerfile: ast_detection/Dockerfile}
+    image: scs-ast-detection:latest
+    environment:
+      <<: *event_env
+      ASTMASTER_REQUIRED: "1"
+    volumes:
+      - ${ASTMASTER_HOST_PATH:-../ast_master}:/opt/ast_master:ro
+    networks: [backend]
+    <<: *hardening
+
+  trainer:
+    build: *ai_build
+    image: scs-ai-engine:latest
+    # Real labelled packages (DIR/<label>/<package>) are mounted read-only; an empty folder = synthetic only.
+    command: ["python", "-m", "ai_engine.train", "--artifacts", "/artifacts", "--real-data", "/data/real"]
+    environment: *event_env
+    volumes:
+      - model_artifacts:/artifacts
+      - ${REAL_DATA_HOST_PATH:-./datasets/real}:/data/real:ro
+    networks: [backend]
+    depends_on:
+      ast_detection: {condition: service_healthy}
+      dashboard: {condition: service_healthy}
+    <<: *hardening
+
+  ai_engine:
+    build: *ai_build
+    image: scs-ai-engine:latest
+    environment: *event_env
+    volumes: [model_artifacts:/artifacts:ro]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=4)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      ast_detection: {condition: service_healthy}
+      trainer: {condition: service_completed_successfully}
+    <<: *hardening
+
+  tests:
+    build: {context: ., dockerfile: tests/Dockerfile}
+    image: scs-tests:latest
+    environment:
+      AST_SERVICE_URL: http://ast_detection:8000
+      AI_ENGINE_URL: http://ai_engine:8100
+      DASHBOARD_URL: http://dashboard:8501
+      SCS_EVENT_TOKEN: ${SCS_EVENT_TOKEN:-scs-local-dev-token}
+      EXPECT_ASTMASTER: "1"
+      LAB_DIR: /lab
+    volumes:
+      - model_artifacts:/artifacts:ro
+      - test_results:/results
+      - ${ASTMASTER_HOST_PATH:-../ast_master}:/opt/ast_master:ro
+      - ${LAB_HOST_PATH:-../supply_chain_lab}:/lab:ro
+    networks: [backend]
+    depends_on:
+      ai_engine: {condition: service_healthy}
+      dashboard: {condition: service_healthy}
+    <<: *hardening
+
+  # On-demand recursive scan:  docker compose run --rm scanner
+  # (scans ../supply_chain_lab read-only; report -> ./reports/scan_report.json, shown on the dashboard)
+  scanner:
+    build: *ai_build
+    image: scs-ai-engine:latest
+    profiles: ["scan"]
+    command: ["python", "scanner.py", "/lab", "--mode", "service", "-o", "/reports/scan_report.json"]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"   # so the report on the host is owned by you
+    environment:
+      <<: *event_env
+      AI_ENGINE_URL: http://ai_engine:8100
+    volumes:
+      - ${LAB_HOST_PATH:-../supply_chain_lab}:/lab:ro
+      - ./reports:/reports
+    networks: [backend]
+    depends_on:
+      ai_engine: {condition: service_healthy}
+    <<: *hardening
+
+networks:
+  backend:
+    internal: true      # AST, AI, trainer and tests have no route to the internet
+  frontend: {}          # only the dashboard joins this, to publish its port on 127.0.0.1
+
+volumes:
+  model_artifacts:
+  test_results:
+  dashboard_data:

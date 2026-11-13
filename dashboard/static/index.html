@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Supply Chain Monitor</title>
+<style>
+:root {
+  --bg: #0f1216; --panel: #161b22; --panel-2: #1c232c; --border: #2a323d; --text: #e6edf3; --muted: #8b98a7;
+  --accent: #58a6ff; --ok: #3fb950; --low: #58a6ff; --medium: #d29922; --high: #f0883e; --critical: #f85149;
+  --code-bg: #0d1117; --hl-medium: rgba(210,153,34,.16); --hl-high: rgba(240,136,62,.20); --hl-critical: rgba(248,81,73,.24);
+  --hl-low: rgba(88,166,255,.12); --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f6f8fa; --panel: #ffffff; --panel-2: #f3f5f8; --border: #d8dee4; --text: #1f2328; --muted: #59636e;
+    --accent: #0969da; --ok: #1a7f37; --low: #0969da; --medium: #9a6700; --high: #bc4c00; --critical: #cf222e;
+    --code-bg: #f6f8fa; --hl-medium: rgba(154,103,0,.12); --hl-high: rgba(188,76,0,.14); --hl-critical: rgba(207,34,46,.14);
+    --hl-low: rgba(9,105,218,.08); }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.dot.ok { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
+.dot.bad { background: var(--critical); }
+.tiles { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.tile { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; min-width: 120px; }
+.tile .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.tile .v { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+main { display: grid; grid-template-columns: 320px minmax(0, 1fr) minmax(0, 1.35fr); gap: 16px; padding: 16px 20px; align-items: start; }
+main > div, section.card { min-width: 0; }
+@media (max-width: 1250px) { main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } #detailCol { grid-column: 1 / -1; } }
+@media (max-width: 760px) { main { grid-template-columns: minmax(0, 1fr); padding: 12px 16px; }
+  .layers { grid-template-columns: 110px 1fr 44px; } .mini { grid-template-columns: repeat(2, 1fr); } header { padding: 12px 16px; } .tiles { margin-left: 0; } }
+section.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+section.card > h2 { font-size: 13px; margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 600; }
+.body { padding: 12px 14px; }
+.muted { color: var(--muted); }
+button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); padding: 6px 10px; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button:disabled { opacity: .5; cursor: wait; }
+input, textarea, select { font: inherit; width: 100%; background: var(--code-bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+textarea { font-family: var(--mono); font-size: 12px; min-height: 120px; resize: vertical; }
+label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+.samples { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.samples button { text-align: left; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed { max-height: calc(100vh - 210px); overflow: auto; }
+.req { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.req:hover { background: var(--panel-2); }
+.req.sel { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); box-shadow: inset 3px 0 0 var(--accent); }
+.req .top { display: flex; align-items: center; gap: 8px; }
+.req .name { font-weight: 600; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.req .time { margin-left: auto; font-size: 11px; color: var(--muted); }
+.stages { display: flex; gap: 4px; margin: 6px 0; flex-wrap: wrap; }
+.stage { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); }
+.stage.done { color: var(--text); border-color: color-mix(in srgb, var(--ok) 50%, var(--border)); }
+.stage.active { color: var(--accent); border-color: var(--accent); animation: pulse 1s infinite alternate; }
+@keyframes pulse { from { opacity: .55; } to { opacity: 1; } }
+.badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; letter-spacing: .3px; color: #fff; }
+.b-CRITICAL { background: var(--critical); } .b-HIGH { background: var(--high); } .b-MEDIUM { background: var(--medium); }
+.b-LOW { background: var(--low); } .b-NONE { background: var(--ok); } .b-PENDING { background: var(--muted); } .b-ERROR { background: var(--critical); }
+.bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 3px; }
+.mini { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 11px; color: var(--muted); margin-top: 6px; }
+.mini b { color: var(--text); font-family: var(--mono); font-weight: 600; }
+.layers { display: grid; grid-template-columns: 150px 1fr 56px; gap: 6px 10px; align-items: center; font-size: 12px; }
+.layers .val { font-family: var(--mono); text-align: right; }
+.code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: 460px; margin-top: 8px; }
+.code table { border-collapse: collapse; width: 100%; font: 12px/1.5 var(--mono); }
+.code td { padding: 0 10px; white-space: pre; vertical-align: top; }
+.code td.ln { color: var(--muted); text-align: right; user-select: none; width: 1%; border-right: 1px solid var(--border); }
+.code td.tags { width: 1%; padding: 0 6px; border-right: 1px solid var(--border); user-select: none; }
+.code td.tags .chip { margin: 0 2px 0 0; }
+.code tr.sev-low { background: var(--hl-low); } .code tr.sev-medium { background: var(--hl-medium); }
+.code tr.sev-high { background: var(--hl-high); } .code tr.sev-critical { background: var(--hl-critical); }
+.code tr.sev-critical td.ln { color: var(--critical); font-weight: 700; } .code tr.sev-high td.ln { color: var(--high); font-weight: 700; }
+.chip { display: inline-block; font: 600 10px/1.6 system-ui, sans-serif; padding: 0 6px; margin-left: 6px; border-radius: 3px; color: #fff; vertical-align: 1px; }
+.c-low { background: var(--low); } .c-medium { background: var(--medium); } .c-high { background: var(--high); } .c-critical { background: var(--critical); }
+details > summary { cursor: pointer; font-family: var(--mono); font-size: 12px; padding: 6px 0; }
+table.grid { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.grid th, table.grid td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+table.grid th { color: var(--muted); font-weight: 600; }
+table.grid th.num { text-align: right; }
+table.grid td.num { font-family: var(--mono); text-align: right; }
+.checks { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.checks li { padding: 2px 0; }
+.ok-t { color: var(--ok); } .bad-t { color: var(--critical); }
+.log { font: 12px/1.6 var(--mono); max-height: 260px; overflow: auto; }
+.log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 14px; }
+.log .src { display: inline-block; width: 104px; color: var(--muted); }
+.log .typ { display: inline-block; width: 190px; color: var(--accent); }
+.empty { padding: 28px 14px; text-align: center; color: var(--muted); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 16px 0 6px; }
+h3:first-child { margin-top: 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 12px; }
+.kv span:nth-child(odd) { color: var(--muted); }
+#logCard { margin: 0 20px 20px; }
+.drop { border: 1.5px dashed var(--border); border-radius: 8px; padding: 14px; text-align: center; color: var(--muted); font-size: 12px; transition: border-color .15s, background .15s; }
+.drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text); }
+.drop .row { justify-content: center; margin-top: 8px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+#uploadMsg { font-size: 12px; margin-top: 8px; min-height: 1em; }
+@media (max-width: 760px) { #logCard { margin: 0 16px 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Supply Chain Monitor</h1>
+  <span class="pill"><span id="wsDot" class="dot"></span><span id="wsText">connecting…</span></span>
+  <div class="tiles" id="tiles"></div>
+</header>
+
+<main>
+  <div id="leftCol">
+    <section class="card">
+      <h2>Submit package</h2>
+      <div class="body">
+        <div class="muted" style="font-size:12px;margin-bottom:6px">Bundled samples</div>
+        <div class="samples" id="samples"></div>
+        <label for="pkgName">Package name</label>
+        <input id="pkgName" value="my-package">
+        <label for="setupSrc">setup.py</label>
+        <textarea id="setupSrc">from setuptools import setup
+
+setup(name="my-package", version="0.1.0", packages=["my_package"])
+</textarea>
+        <label for="modSrc">my_package/__init__.py</label>
+        <textarea id="modSrc">import base64
+
+exec(base64.b64decode("cHJpbnQoJ2hlbGxvJyk="))
+</textarea>
+        <label for="metaPreset">Registry metadata</label>
+        <select id="metaPreset">
+          <option value="established">Established (6 yrs, 120k downloads/wk, signed)</option>
+          <option value="fresh">Brand new (2 days, new account, unsigned)</option>
+        </select>
+        <div class="row" style="margin-top:10px">
+          <button class="primary" id="submitBtn">Analyze</button>
+          <span id="submitMsg" class="muted" style="font-size:12px"></span>
+        </div>
+      </div>
+    </section>
+    <section class="card"><h2>Model &amp; layer verification</h2><div class="body" id="modelCard"><div class="muted">Waiting for training report…</div></div></section>
+    <section class="card"><h2>Verification test suite <span id="testBadge"></span></h2><div class="body" id="testsCard"><div class="muted">No results yet.</div></div></section>
+  </div>
+
+  <div id="feedCol">
+    <section class="card"><h2>Scan Python files <span id="scanBadge"></span></h2>
+      <div class="body">
+        <div class="drop" id="dropZone">
+          Drop a folder or <b>.py</b> files here — only Python files are scanned
+          <div class="row">
+            <button class="primary" id="pickFolder">Choose folder</button>
+            <button id="pickFiles">Choose .py files</button>
+          </div>
+          <input type="file" id="folderInput" class="visually-hidden" webkitdirectory directory multiple>
+          <input type="file" id="filesInput" class="visually-hidden" accept=".py,text/x-python" multiple>
+        </div>
+        <div id="uploadMsg" class="muted"></div>
+        <div id="scanCard" style="margin-top:10px"><div class="muted">No scan yet. Upload above, or run <code>docker compose run --rm scanner</code>.</div></div>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Live pipeline <label class="muted" style="margin:0;display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" id="follow" checked style="width:auto"> follow live</label></h2>
+      <div class="feed" id="feed"><div class="empty">No packages yet. Submit one or wait for traffic.</div></div>
+    </section>
+  </div>
+
+  <div id="detailCol">
+    <section class="card"><h2 id="detailTitle">Assessment detail</h2><div class="body" id="detail"><div class="empty">Select a package to inspect its AST nodes and model scores.</div></div></section>
+  </div>
+</main>
+
+<section class="card" id="logCard"><h2>Event stream <span class="muted" id="evCount" style="font-weight:400"></span></h2><div class="log" id="log"></div></section>
+
+<script>
+"use strict";
+// All untrusted strings go through textContent (via el()); innerHTML is never used with data.
+const S = { reqs: new Map(), order: [], selected: null, log: [], health: null, dirty: false };
+const SEV_RANK = { low: 0, medium: 1, high: 2, critical: 3 };
+const META = {
+  established: { package_age_days: 2200, maintainer_account_age_days: 3000, num_maintainers: 5, maintainer_changed: 0,
+                 version_major: 3, version_jump: 0, downloads_weekly: 120000, signed_commit_ratio: 0.95 },
+  fresh: { package_age_days: 2, maintainer_account_age_days: 3, num_maintainers: 1, maintainer_changed: 0,
+           version_major: 0, version_jump: 0, downloads_weekly: 12, signed_commit_ratio: 0.0 },
+};
+
+function el(tag, props = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null) continue;
+    if (k === "class") n.className = v;
+    else if (k === "style") n.style.cssText = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) if (c != null) n.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return n;
+}
+const fmt = (x, d = 3) => (typeof x === "number" ? x.toFixed(d) : "—");
+const pct = x => (typeof x === "number" ? Math.round(x * 100) + "%" : "—");
+const timeOf = ts => (ts ? new Date(ts).toLocaleTimeString() : "");
+const sevColor = s => `var(--${({ CRITICAL: "critical", HIGH: "high", MEDIUM: "medium", LOW: "low", NONE: "ok" })[s] || "muted"})`;
+function bar(value, color) { return el("div", { class: "bar" }, el("i", { style: `width:${Math.max(0, Math.min(1, value || 0)) * 100}%;background:${color}` })); }
+
+// ---------------------------------------------------------------- events
+function getReq(id, pkg, ts) {
+  let r = S.reqs.get(id);
+  if (!r) { r = { id, pkg, first: ts, stages: {}, events: 0 }; S.reqs.set(id, r); S.order.unshift(id); if (S.order.length > 200) S.reqs.delete(S.order.pop()); }
+  if (pkg) r.pkg = pkg;
+  return r;
+}
+function ingest(e) {
+  S.log.push(e); if (S.log.length > 400) S.log.shift();
+  if (e.request_id) {
+    const r = getReq(e.request_id, e.package, e.ts); r.events++; r.last = e.ts;
+    switch (e.type) {
+      case "dashboard.submission": r.stages.submitted = true; r.via = e.data.via; break;
+      case "ai.assess.started": r.stages.queued = true; r.metadata = e.data.metadata; break;
+      case "ast.parse.started": r.stages.parsing = true; r.files = e.data.files; break;
+      case "ast.parse.completed": r.stages.parsed = true; r.ast = e.data; break;
+      case "ai.assess.completed": r.stages.scored = true; r.report = e.data.report; break;
+      case "ai.assess.failed": r.error = e.data.error; break;
+    }
+    if (document.getElementById("follow").checked && (e.type === "ast.parse.started" || !S.selected)) S.selected = r.id;
+  } else if (e.type.startsWith("training.") || e.type === "ai.model.loaded") {
+    refreshHealth();
+  } else if (e.type === "scan.completed") {
+    refreshScan();
+  }
+  S.dirty = true;
+}
+function connect(delay = 500) {
+  const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  const dot = document.getElementById("wsDot"), txt = document.getElementById("wsText");
+  ws.onopen = () => { dot.className = "dot ok"; txt.textContent = "live"; delay = 500; };
+  ws.onmessage = m => {
+    const msg = JSON.parse(m.data);
+    if (msg.kind === "backlog") { S.reqs.clear(); S.order = []; S.log = []; msg.events.forEach(ingest); }
+    else if (msg.kind === "event") ingest(msg.event);
+  };
+  ws.onclose = () => { dot.className = "dot bad"; txt.textContent = "reconnecting…"; setTimeout(() => connect(Math.min(delay * 2, 8000)), delay); };
+}
+
+// ---------------------------------------------------------------- render
+function stageChips(r) {
+  const failed = !!r.error;
+  const steps = [["submitted", "Submitted"], ["parsing", "AST parsing"], ["parsed", "AST analysed"], ["scored", "AI scored"]];
+  const firstOpen = steps.findIndex(([k]) => !r.stages[k] && !(k === "submitted" && r.stages.queued));
+  return el("div", { class: "stages" }, steps.map(([k, label], i) => {
+    const done = r.stages[k] || (k === "submitted" && r.stages.queued);
+    const active = !done && !failed && i === firstOpen;
+    let text = label;
+    if (k === "parsed" && r.ast) text += ` · ${r.ast.risky_nodes.length} nodes`;
+    return el("span", { class: "stage" + (done ? " done" : active ? " active" : "") }, text);
+  }), failed ? el("span", { class: "stage", style: "color:var(--critical);border-color:var(--critical)" }, "failed") : null);
+}
+function renderFeed() {
+  const feed = document.getElementById("feed");
+  if (!S.order.length) return;
+  feed.replaceChildren(...S.order.slice(0, 100).map(id => {
+    const r = S.reqs.get(id), rep = r.report;
+    const sev = r.error ? "ERROR" : rep ? rep.severity : "PENDING";
+    return el("div", { class: "req" + (S.selected === id ? " sel" : ""), onclick: () => { S.selected = id; document.getElementById("follow").checked = false; S.dirty = true; } },
+      el("div", { class: "top" }, el("span", { class: `badge b-${sev}` }, rep ? `${rep.severity} · ${rep.action}` : sev),
+        el("span", { class: "name", title: r.pkg }, r.pkg || "?"), el("span", { class: "time" }, timeOf(r.first))),
+      stageChips(r),
+      rep ? [bar(rep.risk_score, sevColor(rep.severity)),
+        el("div", { class: "mini" },
+          el("span", {}, "risk ", el("b", {}, fmt(rep.risk_score, 2))),
+          el("span", {}, "RF ", el("b", {}, fmt(rep.layers.supervised.threat_probability, 2))),
+          el("span", {}, "IF ", el("b", {}, fmt(rep.layers.anomaly.percentile, 2))),
+          el("span", {}, "AST ", el("b", {}, r.ast ? r.ast.static_risk.verdict : rep.layers.ast_static.verdict)))] : null);
+  }));
+}
+function codeViewer(ast) {
+  const byFile = {};
+  for (const n of ast.risky_nodes) (byFile[n.path] ||= {})[n.line] ||= [], byFile[n.path][n.line].push(n);
+  const paths = Object.keys(ast.sources || {}).sort((a, b) => (byFile[b] ? 1 : 0) - (byFile[a] ? 1 : 0) || a.localeCompare(b));
+  if (!paths.length) return el("div", { class: "muted" }, "No source captured for this request.");
+  return paths.map(path => {
+    const marks = byFile[path] || {};
+    const lines = ast.sources[path].split("\n");
+    const rows = lines.map((text, i) => {
+      const ns = marks[i + 1] || [];
+      const top = ns.reduce((m, n) => (SEV_RANK[n.severity] > SEV_RANK[m] ? n.severity : m), ns.length ? "low" : null);
+      const chips = [...new Map(ns.flatMap(n => n.categories.map(c => [c, n.severity]))).entries()]
+        .map(([c, s]) => el("span", { class: `chip c-${s}`, title: ns.map(n => `${n.node} ${n.name}`).join("\n") }, c));
+      // Chips live in their own gutter so they stay visible however long the code line is.
+      return el("tr", { class: top ? `sev-${top}` : null }, el("td", { class: "ln" }, String(i + 1)),
+        Object.keys(marks).length ? el("td", { class: "tags" }, chips) : null, el("td", {}, text));
+    });
+    const count = Object.values(marks).flat().length;
+    return el("details", { open: count ? "" : null },
+      el("summary", {}, `${path} `, el("span", { class: "muted" }, count ? `— ${count} risky node(s)` : "— clean")),
+      el("div", { class: "code" }, el("table", {}, rows)));
+  });
+}
+function renderDetail() {
+  const box = document.getElementById("detail"), title = document.getElementById("detailTitle");
+  const r = S.selected && S.reqs.get(S.selected);
+  if (!r) return;
+  title.replaceChildren(el("span", {}, "Assessment · ", el("span", { style: "font-family:var(--mono)" }, r.pkg || "")));
+  const rep = r.report, ast = r.ast, kids = [];
+  if (r.error) kids.push(el("div", { class: "bad-t" }, `Assessment failed: ${r.error}`));
+  if (rep) {
+    const L = rep.layers;
+    kids.push(el("div", { class: "row", style: "margin-bottom:10px" },
+      el("span", { class: `badge b-${rep.severity}` }, `${rep.severity} · ${rep.action}`),
+      el("span", {}, "Predicted: ", el("b", {}, rep.predicted_attack_type)),
+      el("span", { class: "muted" }, `detected by: ${rep.detection_layers.join(", ") || "—"}`)));
+    kids.push(el("h3", {}, "Layer contributions"),
+      el("div", { class: "layers" },
+        el("span", {}, "AST static score"), bar(L.ast_static.score, "var(--accent)"), el("span", { class: "val" }, fmt(L.ast_static.score, 2)),
+        el("span", {}, "Random Forest P(threat)"), bar(L.supervised.threat_probability, "var(--high)"), el("span", { class: "val" }, fmt(L.supervised.threat_probability, 2)),
+        el("span", {}, "Isolation Forest pct."), bar(L.anomaly.percentile, "var(--medium)"), el("span", { class: "val" }, fmt(L.anomaly.percentile, 2)),
+        el("span", { style: "font-weight:600" }, "Final risk"), bar(rep.risk_score, sevColor(rep.severity)), el("span", { class: "val", style: "font-weight:700" }, fmt(rep.risk_score, 3))),
+      el("div", { class: "kv", style: "margin-top:8px" },
+        el("span", {}, "AST verdict (AST Master)"), el("span", {}, `${L.ast_static.verdict} (${L.ast_static.source})`),
+        el("span", {}, "Closest known attack"), el("span", {}, `${rep.closest_known_attack} (${pct(L.supervised.closest_attack_confidence)})`),
+        el("span", {}, "Risk without AST layer"), el("span", {}, `${fmt(rep.ast_influence.risk_without_ast)} (Δ ${rep.ast_influence.delta >= 0 ? "+" : ""}${fmt(rep.ast_influence.delta)})${rep.ast_influence.verdict_changes_without_ast ? " — verdict depends on AST" : ""}`),
+        el("span", {}, "Latency"), el("span", {}, `${fmt(rep.duration_ms, 0)} ms total${ast ? `, AST ${fmt(ast.duration_ms, 1)} ms` : ""}`)));
+    const v = rep.verification;
+    kids.push(el("h3", {}, "Per-prediction verification"), el("ul", { class: "checks" },
+      Object.entries(v).filter(([k]) => k !== "passed").map(([k, val]) =>
+        el("li", {}, el("span", { class: val ? "ok-t" : "bad-t" }, typeof val === "boolean" ? (val ? "✓ " : "✗ ") : "• "), `${k.replaceAll("_", " ")}${typeof val === "boolean" ? "" : `: ${val}`}`))));
+  } else if (!r.error) kids.push(el("div", { class: "muted" }, "Waiting for the AI engine…"));
+  if (ast) {
+    kids.push(el("h3", {}, `AST analysis · ${ast.risky_nodes.length} risky node(s) · ${ast.nonzero_features}/${ast.n_features} features active`), ...[codeViewer(ast)].flat());
+    if (ast.findings.length) kids.push(el("h3", {}, "AST Master findings"), el("table", { class: "grid" },
+      el("tr", {}, el("th", {}, "severity"), el("th", {}, "rule"), el("th", {}, "context"), el("th", {}, "location")),
+      ast.findings.slice(0, 15).map(f => el("tr", {}, el("td", {}, el("span", { class: `chip c-${f.severity === "critical" ? "critical" : f.severity === "high" ? "high" : f.severity === "medium" ? "medium" : "low"}`, style: "margin:0" }, f.severity)),
+        el("td", {}, f.rule), el("td", {}, f.context), el("td", { style: "font-family:var(--mono)" }, `${f.path}:${f.line}`)))));
+  } else if (r.stages.parsing) kids.push(el("div", { class: "muted", style: "margin-top:10px" }, "AST service is parsing…"));
+  if (rep && rep.top_factors.length) kids.push(el("h3", {}, "Top model factors"), el("table", { class: "grid" },
+    el("tr", {}, el("th", {}, "feature"), el("th", { class: "num" }, "value"), el("th", { class: "num" }, "z")),
+    rep.top_factors.map(f => el("tr", {}, el("td", { style: "font-family:var(--mono)" }, f.feature), el("td", { class: "num" }, fmt(f.value, 2)), el("td", { class: "num" }, fmt(f.z_score, 2))))));
+  box.replaceChildren(...kids);
+}
+function renderLog() {
+  const log = document.getElementById("log");
+  document.getElementById("evCount").textContent = `${S.log.length} shown`;
+  log.replaceChildren(...S.log.slice(-150).reverse().map(e =>
+    el("div", {}, el("span", { class: "muted" }, timeOf(e.ts) + "  "), el("span", { class: "src" }, e.source),
+      el("span", { class: "typ" }, e.type), e.package || "", summarize(e))));
+}
+function summarize(e) {
+  const d = e.data || {};
+  if (e.type === "ast.parse.completed") return `  → ${d.static_risk.verdict}, ${d.risky_nodes.length} risky nodes, ${d.duration_ms} ms`;
+  if (e.type === "ai.assess.completed") return `  → ${d.report.severity} risk=${fmt(d.report.risk_score, 2)} ${d.report.predicted_attack_type}`;
+  if (e.type === "ast.parse.started") return `  (${d.files.length} files)`;
+  if (e.type === "training.completed") return `  verification ${d.passed ? "PASSED" : "FAILED"} · hybrid F1 ${fmt(d.test_metrics.hybrid.f1, 3)}`;
+  if (e.type === "ai.assess.failed") return `  ${d.error}`;
+  if (e.type === "scan.completed") return `  ${d.root} → ${d.summary.overall_verdict}, ${d.summary.files_analyzed}/${d.summary.files_discovered} files analysed`;
+  if (e.type === "scan.started") return `  ${d.root}`;
+  return "";
+}
+function tile(k, v, ok) { return el("div", { class: "tile" }, el("div", { class: "k" }, k), el("div", { class: "v" }, ok == null ? null : el("span", { class: "dot " + (ok ? "ok" : "bad") }), v)); }
+function renderHealth() {
+  const h = S.health; if (!h) return;
+  const ast = h.ast_detection, ai = h.ai_engine, t = h.tests, tr = h.training;
+  const lv = tr && tr.layer_verification;
+  document.getElementById("tiles").replaceChildren(
+    tile("AST service", ast.reachable ? `up · AST Master ${ast.backend && ast.backend.available ? "v" + ast.backend.rules_version : "missing"}` : "down", ast.reachable && ast.backend && ast.backend.available),
+    tile("AI engine", ai.reachable ? (ai.model && ai.model.loaded ? `model loaded · ${ai.assessed} scored` : "no model") : "down", ai.reachable && ai.model && ai.model.loaded),
+    tile("Layer verification", lv ? (lv.passed ? "passed" : "FAILED") : "—", lv ? lv.passed : null),
+    tile("Test suite", t.available ? `${t.passed}/${t.tests} passed` : "pending", t.available ? t.failures + t.errors === 0 : null),
+    tile("Events", String(h.dashboard.events_total), null));
+  if (tr) {
+    const m = tr.test_metrics, views = ["static_only", "supervised_only", "anomaly_only", "hybrid"];
+    document.getElementById("modelCard").replaceChildren(
+      el("table", { class: "grid" }, el("tr", {}, el("th", {}, "view"), ["prec", "recall", "F1", "FPR"].map(h => el("th", { class: "num" }, h))),
+        views.map(v => el("tr", { style: v === "hybrid" ? "font-weight:700" : null }, el("td", {}, v.replace("_only", "")),
+          ...["precision", "recall", "f1", "false_positive_rate"].map(k => el("td", { class: "num" }, fmt(m[v][k], 3)))))),
+      el("h3", {}, "Layer checks"),
+      el("ul", { class: "checks" }, Object.entries(lv.checks).map(([k, ok]) => el("li", {}, el("span", { class: ok ? "ok-t" : "bad-t" }, ok ? "✓ " : "✗ "), k.replaceAll("_", " ")))),
+      el("div", { class: "kv", style: "margin-top:8px" },
+        el("span", {}, "AST share of RF importance"), el("span", {}, pct(lv.rf_ast_importance_share)),
+        el("span", {}, "ROC-AUC with / without AST"), el("span", {}, `${fmt(lv.hybrid_roc_auc)} / ${fmt(lv.hybrid_roc_auc_without_ast)}`),
+        el("span", {}, "FPR static-only → hybrid"), el("span", {}, `${pct(lv.static_only_fpr)} → ${pct(lv.hybrid_fpr)}`),
+        el("span", {}, "Training set"), el("span", {}, tr.dataset ? `${tr.dataset.n_packages} packages, ${tr.dataset.n_ast_features} AST features` : "—")));
+  }
+  if (t.available) {
+    const badge = document.getElementById("testBadge");
+    badge.replaceChildren(el("span", { class: `badge b-${t.failures + t.errors ? "CRITICAL" : "NONE"}` }, `${t.passed}/${t.tests}`));
+    const byMod = {};
+    for (const c of t.cases) (byMod[c.module] ||= []).push(c);
+    document.getElementById("testsCard").replaceChildren(
+      el("div", { class: "muted", style: "font-size:12px;margin-bottom:6px" }, `${t.time.toFixed(1)} s · ${t.skipped} skipped · ${t.timestamp ? new Date(t.timestamp).toLocaleString() : ""}`),
+      ...Object.entries(byMod).map(([mod, cases]) => el("details", {},
+        el("summary", {}, `${mod} `, el("span", { class: cases.every(c => c.outcome !== "failed" && c.outcome !== "error") ? "ok-t" : "bad-t" },
+          `${cases.filter(c => c.outcome === "passed").length}/${cases.length}`)),
+        el("ul", { class: "checks" }, cases.map(c => el("li", {}, el("span", { class: c.outcome === "passed" ? "ok-t" : c.outcome === "skipped" ? "muted" : "bad-t" },
+          c.outcome === "passed" ? "✓ " : c.outcome === "skipped" ? "– " : "✗ "), c.name))))));
+  }
+}
+const VERDICT_SEV = { MALICIOUS: "CRITICAL", SUSPICIOUS: "MEDIUM", BENIGN: "NONE", CLEAN: "NONE", ERROR: "ERROR", NOT_ANALYZED: "PENDING" };
+let lastScanId = null;
+async function refreshScan() {
+  let r;
+  try { r = await (await fetch("/api/scans/latest")).json(); } catch (_) { return; }
+  if (!r.available || r.scan_id === lastScanId) return;
+  renderScan(r);
+}
+function renderScan(r) {
+  lastScanId = r.scan_id;
+  const s = r.summary;
+  document.getElementById("scanBadge").replaceChildren(el("span", { class: `badge b-${VERDICT_SEV[s.overall_verdict]}` }, s.overall_verdict));
+  document.getElementById("scanCard").replaceChildren(
+    el("div", { class: "muted", style: "font-size:12px;margin-bottom:8px" },
+      `${r.root} · ${new Date(r.started_at).toLocaleString()} · ${r.duration_seconds} s · ${r.engine.mode} mode`),
+    el("div", { class: "kv", style: "margin-bottom:8px" },
+      el("span", {}, "Files discovered"), el("span", {}, `${s.files_discovered} (${Object.entries(s.by_kind).map(([k, v]) => `${k} ${v}`).join(", ")})`),
+      el("span", {}, "Analysed (AST + AI)"), el("span", {}, String(s.files_analyzed)),
+      el("span", {}, "Verdicts"), el("span", {}, Object.entries(s.verdicts).map(([k, v]) => `${k} ${v}`).join(" · "))),
+    el("table", { class: "grid" },
+      el("tr", {}, el("th", {}, "project"), el("th", { class: "num" }, "analysed"), el("th", { class: "num" }, "max risk"), el("th", {}, "verdict")),
+      r.groups.map(g => el("tr", {}, el("td", { style: "font-family:var(--mono)" }, g.group), el("td", { class: "num" }, String(g.files_analyzed)),
+        el("td", { class: "num" }, g.max_risk == null ? "—" : fmt(g.max_risk, 3)),
+        el("td", {}, el("span", { class: `badge b-${VERDICT_SEV[g.project_verdict]}` }, g.project_verdict))))),
+    el("h3", {}, `Flagged files (${r.flagged.length})`),
+    ...(r.flagged.length ? r.flagged.map(f => el("div", { style: "margin:6px 0 10px" },
+      el("div", { class: "row" }, el("span", { class: `badge b-${VERDICT_SEV[f.verdict]}` }, f.verdict),
+        el("span", { style: "font-family:var(--mono);font-size:12px;word-break:break-all" }, f.path)),
+      f.risk_score != null ? el("div", { class: "mini" },
+        el("span", {}, "risk ", el("b", {}, fmt(f.risk_score, 2))), el("span", {}, "RF ", el("b", {}, fmt(f.scores.random_forest, 2))),
+        el("span", {}, "IF ", el("b", {}, fmt(f.scores.isolation_forest, 2))), el("span", {}, "AST ", el("b", {}, f.scores.ast_verdict))) : el("div", { class: "muted" }, f.reason || ""),
+      el("ul", { class: "checks", style: "margin-top:4px" }, f.ast_risk_factors.slice(0, 4).map(n => el("li", { style: "font-family:var(--mono);font-size:11px" },
+        el("span", { class: `chip c-${n.severity}`, style: "margin:0 6px 0 0" }, n.severity), `line ${n.line}: ${n.call} [${n.categories.join(", ")}]`))))) :
+      [el("div", { class: "ok-t" }, "✓ No supply chain threats found.")]));
+}
+async function refreshHealth() {
+  try { S.health = await (await fetch("/api/health")).json(); renderHealth(); } catch (_) { /* retried on next tick */ }
+}
+function loop() {
+  if (S.dirty) { S.dirty = false; renderFeed(); renderDetail(); renderLog(); }
+  requestAnimationFrame(loop);
+}
+
+// ---------------------------------------------------------------- submit
+async function post(url, body) {
+  const msg = document.getElementById("submitMsg");
+  msg.textContent = "submitting…";
+  try {
+    const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : null });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.statusText);
+    msg.textContent = `${data.report.package_name}: ${data.report.severity}`;
+    S.selected = data.request_id; S.dirty = true;
+  } catch (err) { msg.textContent = `error: ${err.message}`; }
+}
+document.getElementById("submitBtn").addEventListener("click", () => {
+  const name = document.getElementById("pkgName").value.trim() || "my-package";
+  const mod = name.replace(/[-.]/g, "_");
+  document.querySelector("label[for=modSrc]").textContent = `${mod}/__init__.py`;
+  post("/api/submit", { name, files: { "setup.py": document.getElementById("setupSrc").value, [`${mod}/__init__.py`]: document.getElementById("modSrc").value },
+    metadata: META[document.getElementById("metaPreset").value] });
+});
+async function loadSamples() {
+  try {
+    const { samples } = await (await fetch("/api/samples")).json();
+    document.getElementById("samples").replaceChildren(...samples.map(s =>
+      el("button", { title: `${s.name}\n${s.files.join("\n")}`, onclick: () => post(`/api/samples/${encodeURIComponent(s.id)}`) }, s.id.replaceAll("_", " "))));
+  } catch (_) { /* dashboard still works without samples */ }
+}
+
+// ---------------------------------------------------------------- upload (Python files only)
+const MAX_UPLOAD_FILE = 2 * 1024 * 1024;
+const isPy = p => p.toLowerCase().endsWith(".py");
+function uploadMsg(text, cls = "muted") { const m = document.getElementById("uploadMsg"); m.className = cls; m.textContent = text; }
+function fromFileList(list) { return [...list].map(f => ({ path: f.webkitRelativePath || f.name, file: f })); }
+async function fromDrop(items) {
+  const out = [];
+  const readAll = reader => new Promise((res, rej) => { const acc = []; const next = () => reader.readEntries(b => b.length ? (acc.push(...b), next()) : res(acc), rej); next(); });
+  async function walk(entry, prefix) {
+    if (entry.isFile) out.push({ path: prefix + entry.name, file: await new Promise((res, rej) => entry.file(res, rej)) });
+    else if (entry.isDirectory) for (const child of await readAll(entry.createReader())) await walk(child, prefix + entry.name + "/");
+  }
+  const entries = [...items].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  for (const e of entries) await walk(e, "");
+  return out;
+}
+async function uploadScan(all) {
+  const py = all.filter(e => isPy(e.path));
+  const ignored = all.length - py.length;
+  if (!py.length) { uploadMsg(`No Python files found${ignored ? ` (${ignored} other file(s) ignored)` : ""}.`, "bad-t"); return; }
+  const big = py.filter(e => e.file.size > MAX_UPLOAD_FILE);
+  const ok = py.filter(e => e.file.size <= MAX_UPLOAD_FILE);
+  const root = (py[0].path.includes("/") ? py[0].path.split("/")[0] : "uploaded files");
+  uploadMsg(`Scanning ${ok.length} Python file(s)…${ignored ? ` ${ignored} non-Python file(s) ignored.` : ""}${big.length ? ` ${big.length} over 2 MB skipped.` : ""}`);
+  for (const b of document.querySelectorAll("#dropZone button")) b.disabled = true;
+  try {
+    const files = {};
+    for (const e of ok) files[e.path] = await e.file.text();
+    const resp = await fetch("/api/scan/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ root, files }) });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.detail && (data.detail.error || data.detail)) || resp.statusText);
+    renderScan({ ...data, flagged: data.files.filter(f => ["MALICIOUS", "SUSPICIOUS", "ERROR"].includes(f.verdict)) });
+    const s = data.summary;
+    uploadMsg(`Done: ${s.files_analyzed} Python file(s) scanned in ${data.duration_seconds}s — ${s.overall_verdict}.${ignored ? ` ${ignored} non-Python file(s) ignored.` : ""}`,
+      s.overall_verdict === "CLEAN" ? "ok-t" : "bad-t");
+  } catch (err) { uploadMsg(`Upload failed: ${err.message}`, "bad-t"); }
+  finally { for (const b of document.querySelectorAll("#dropZone button")) b.disabled = false; }
+}
+document.getElementById("pickFolder").addEventListener("click", () => document.getElementById("folderInput").click());
+document.getElementById("pickFiles").addEventListener("click", () => document.getElementById("filesInput").click());
+for (const id of ["folderInput", "filesInput"]) document.getElementById(id).addEventListener("change", ev => { uploadScan(fromFileList(ev.target.files)); ev.target.value = ""; });
+const dz = document.getElementById("dropZone");
+dz.addEventListener("dragover", ev => { ev.preventDefault(); dz.classList.add("over"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("over"));
+dz.addEventListener("drop", async ev => { ev.preventDefault(); dz.classList.remove("over"); uploadScan(await fromDrop(ev.dataTransfer.items)); });
+
+connect(); loadSamples(); refreshHealth(); refreshScan(); setInterval(() => { refreshHealth(); refreshScan(); }, 5000); loop();
+</script>
+</body>
+</html>

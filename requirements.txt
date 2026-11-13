@@ -1,0 +1,4 @@
+# Everything needed to run all services and the test suite locally (Docker images install per-service subsets).
+-r ai_engine/requirements.txt
+-r dashboard/requirements.txt
+pytest>=7.4

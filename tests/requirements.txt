@@ -1,0 +1,4 @@
+-r ../ai_engine/requirements.txt
+pytest>=7.4
+httpx>=0.27
+websockets>=12
