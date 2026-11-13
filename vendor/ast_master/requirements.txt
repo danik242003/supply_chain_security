@@ -1,0 +1,2 @@
+# Only Phase 3 needs this. Without it the scanner still runs, and reports Phase 3 as unavailable.
+scikit-learn>=1.4

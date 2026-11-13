@@ -23,10 +23,10 @@ to disk.
 
 Usage::
 
-    python scanner.py ../supply_chain_lab                     # local mode, CLI summary
-    python scanner.py ../supply_chain_lab -o report.json --all
+    python scanner.py supply_chain_lab                     # local mode, CLI summary
+    python scanner.py supply_chain_lab -o report.json --all
     AI_ENGINE_URL=http://ai_engine:8100 python scanner.py /lab   # service mode
-    docker compose run --rm scanner                           # scan ../supply_chain_lab in Docker
+    docker compose run --rm scanner                           # scan ./supply_chain_lab in Docker
 """
 
 from __future__ import annotations

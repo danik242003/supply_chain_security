@@ -14,6 +14,7 @@ COPY ai_engine/requirements.txt /tmp/ai_engine/requirements.txt
 COPY tests/requirements.txt /tmp/tests/requirements.txt
 RUN pip install --only-binary=:all: -r /tmp/tests/requirements.txt && rm -r /tmp/ai_engine /tmp/tests
 RUN useradd --uid 10001 --create-home tester && install -d -o tester -g tester /results
+COPY vendor/ast_master /opt/ast_master
 WORKDIR /app
 COPY ai_engine ./ai_engine
 COPY ast_detection ./ast_detection

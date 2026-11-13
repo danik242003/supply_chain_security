@@ -6,3 +6,5 @@ artifacts
 *.joblib
 # real (possibly malicious) training packages: mounted read-only, never baked into images
 datasets
+# test lab is mounted read-only at runtime, not baked into images
+supply_chain_lab

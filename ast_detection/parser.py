@@ -1,7 +1,7 @@
 """Discovery and wrapper for the local AST Master analyzer (``astmaster``).
 
-AST Master lives outside this project (by default ``~/Desktop/ast_master``; in
-Docker it is mounted read-only at ``/opt/ast_master``). This module finds it,
+AST Master is vendored in this project at ``vendor/ast_master`` (in Docker it is
+baked into the image at ``/opt/ast_master``). This module finds it,
 imports only its side-effect-free security layer, and exposes a small, stable
 interface. If it cannot be found or imported, :class:`AstMasterParser` reports
 ``available = False`` and the service keeps working with the built-in extractor.
@@ -10,8 +10,9 @@ Search order for the directory that contains the ``astmaster`` package:
 
 1. ``$ASTMASTER_PATH``
 2. ``/opt/ast_master``
-3. ``<project parent>/ast_master`` (sibling of this project on the Desktop)
-4. ``~/Desktop/ast_master``
+3. ``<project>/vendor/ast_master`` (vendored copy)
+4. ``<project parent>/ast_master`` (sibling of this project on the Desktop)
+5. ``~/Desktop/ast_master``
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ def candidate_roots() -> list[Path]:
     if os.environ.get(ENV_VAR):
         roots.append(Path(os.environ[ENV_VAR]).expanduser())
     roots.append(Path("/opt/ast_master"))
+    roots.append(Path(__file__).resolve().parents[1] / "vendor" / "ast_master")
     roots.append(Path(__file__).resolve().parents[2] / "ast_master")
     roots.append(Path.home() / "Desktop" / "ast_master")
     return roots

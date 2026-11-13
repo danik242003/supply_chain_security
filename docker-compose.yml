@@ -38,7 +38,7 @@ services:
       - test_results:/results:ro
       - ./reports:/reports:ro
       - dashboard_data:/data
-    ports: ["127.0.0.1:${DASHBOARD_PORT:-8501}:8501"]   # localhost only
+    ports: ["${DASHBOARD_BIND:-127.0.0.1}:${DASHBOARD_PORT:-8501}:8501"]   # DASHBOARD_BIND=0.0.0.0 to reach it from the LAN
     networks: [backend, frontend]
     <<: *hardening
 
@@ -48,8 +48,6 @@ services:
     environment:
       <<: *event_env
       ASTMASTER_REQUIRED: "1"
-    volumes:
-      - ${ASTMASTER_HOST_PATH:-../ast_master}:/opt/ast_master:ro
     networks: [backend]
     <<: *hardening
 
@@ -97,8 +95,7 @@ services:
     volumes:
       - model_artifacts:/artifacts:ro
       - test_results:/results
-      - ${ASTMASTER_HOST_PATH:-../ast_master}:/opt/ast_master:ro
-      - ${LAB_HOST_PATH:-../supply_chain_lab}:/lab:ro
+      - ${LAB_HOST_PATH:-./supply_chain_lab}:/lab:ro
     networks: [backend]
     depends_on:
       ai_engine: {condition: service_healthy}
@@ -106,7 +103,7 @@ services:
     <<: *hardening
 
   # On-demand recursive scan:  docker compose run --rm scanner
-  # (scans ../supply_chain_lab read-only; report -> ./reports/scan_report.json, shown on the dashboard)
+  # (scans ./supply_chain_lab read-only; report -> ./reports/scan_report.json, shown on the dashboard)
   scanner:
     build: *ai_build
     image: scs-ai-engine:latest
@@ -117,7 +114,7 @@ services:
       <<: *event_env
       AI_ENGINE_URL: http://ai_engine:8100
     volumes:
-      - ${LAB_HOST_PATH:-../supply_chain_lab}:/lab:ro
+      - ${LAB_HOST_PATH:-./supply_chain_lab}:/lab:ro
       - ./reports:/reports
     networks: [backend]
     depends_on:

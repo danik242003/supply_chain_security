@@ -1,5 +1,5 @@
 # AST detection service: stdlib-only static analysis API.
-# AST Master is NOT copied in: docker-compose mounts the local desktop copy read-only at /opt/ast_master.
+# AST Master is vendored in this repo (vendor/ast_master) and baked into the image at /opt/ast_master.
 FROM python:3.13-slim-trixie
 
 ENV PYTHONUNBUFFERED=1 \
@@ -9,6 +9,7 @@ ENV PYTHONUNBUFFERED=1 \
     AST_PORT=8000
 
 RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin astsvc
+COPY vendor/ast_master /opt/ast_master
 WORKDIR /app
 COPY ast_detection ./ast_detection
 

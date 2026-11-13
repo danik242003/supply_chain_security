@@ -1,6 +1,6 @@
 # supply_chain_security
 
-Offline supply chain attack detection for Python packages: static AST analysis, ML models, and a live admin dashboard. It uses no LLMs or external AI services. It is built from scikit-learn models, your local **AST Master** analyzer (`../ast_master`, mounted read-only), and a built-in AST extractor.
+Offline supply chain attack detection for Python packages: static AST analysis, ML models, and a live admin dashboard. It uses no LLMs or external AI services. It is built from scikit-learn models, the **AST Master** analyzer (vendored in `vendor/ast_master` and baked into the image), and a built-in AST extractor.
 
 ```
                          ┌──────────── telemetry events (HTTP, shared token) ────────────┐
@@ -33,7 +33,24 @@ Then open **http://127.0.0.1:8501** (bound to localhost only).
 | `test_results` (`junit.xml`) | tests | dashboard |
 | `dashboard_data` (`events.jsonl`) | dashboard | dashboard (history survives restarts) |
 
-Set `SCS_EVENT_TOKEN` to change the shared event-ingest token. Set `ASTMASTER_HOST_PATH` if AST Master is not at `../ast_master`.
+Set `SCS_EVENT_TOKEN` to change the shared event-ingest token. Set `DASHBOARD_BIND=0.0.0.0` to make the dashboard reachable from other machines on your network.
+
+The project is self-contained: AST Master is in `vendor/ast_master` and the test lab is in `supply_chain_lab/`, so a clone of this repo needs nothing else.
+
+## Run on a Raspberry Pi 4
+
+Tested on ARM64 (aarch64) with 4 GB RAM: the full pipeline (train + serve + 75 tests) peaks at about 600 MB across all containers. Use the **64-bit** Raspberry Pi OS; the 32-bit OS has no prebuilt scikit-learn wheels.
+
+```bash
+curl -fsSL https://get.docker.com | sh       # once: Docker Engine + Compose plugin
+sudo usermod -aG docker $USER && newgrp docker
+
+git clone https://github.com/danik242003/supply_chain_security.git
+cd supply_chain_security
+DASHBOARD_BIND=0.0.0.0 docker compose up -d --build
+```
+
+Open `http://<pi-ip>:8501` from another computer (find the IP with `hostname -I`). Leave `DASHBOARD_BIND` out to keep the dashboard on the Pi itself only. Stop with `docker compose down`. The first build downloads the Python base image and wheels, so it needs internet; after that, everything runs offline.
 
 ## Train on your own real data
 
@@ -106,13 +123,13 @@ Each file goes through AST → Random Forest + Isolation Forest → hybrid score
 
 ## Scan a directory (`scanner.py`)
 
-This recursively audits every relevant file under a directory, `../supply_chain_lab` by default:
+This recursively audits every relevant file under a directory, `./supply_chain_lab` by default:
 
 ```bash
 docker compose up -d --build              # start the stack (if it isn't running)
-docker compose run --rm scanner           # scan ../supply_chain_lab via ai_engine -> ast_detection
+docker compose run --rm scanner           # scan ./supply_chain_lab via ai_engine -> ast_detection
 #   LAB_HOST_PATH=/other/dir docker compose run --rm scanner
-python scanner.py ../supply_chain_lab -o reports/scan_report.json [--all] [--fail-on malicious]   # local mode
+python scanner.py supply_chain_lab -o reports/scan_report.json [--all] [--fail-on malicious]   # local mode
 ```
 
 **What it covers:**
